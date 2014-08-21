@@ -1,0 +1,194 @@
+
+Building:
+	- Install libevent and glib
+	- Probably adapt paths in Makefile
+	- type "make"
+
+Configuration:
+
+  Adapter:
+  --------
+
+	  As getstream is supposed to support multiple adapters with the same
+	  program instance the configuration starts with an adapter clause:
+
+		  adapter 1 {
+			budget-mode	1;
+			packet-buffer	50;
+			stat-interval	120;
+			stuck-interval  200;
+		  };
+
+	  - budget-mode
+		Set to "0" disabled the budget mode where getstream
+		request a seperate PID filter from the kernels filter. As
+		the filters are limited on the full featured cards
+		this is only a workaround and may work for 2-3 TV
+		Channels. Streaming a full transponder on a full featured
+		card is most certainly not possible.
+		Getstream automatically disables budget mode when setting
+		the filter for bit 0x2000 (Illegal value - tells kernel to
+		stream full transponder aka "budget-mode") and setting
+		the filter returns an error.
+
+	  - packet-buffer
+		Set the amount of packets getstream trys to get from the
+		kernels dvr interface. I see typically ~44 Packets/s per
+		round read from the kernel. Setting this too high just
+		wastes memory (a packet is 188 Bytes) setting it to low
+		creates more context-switches and will reduce performance.
+			
+	  - stat-interval
+	  	The interval in seconds you will see the statistics on in the log e.g.
+
+		2007-10-25 08:27:02.323 dvr: inputstats: 149 pids 23259 pkt/s 4372702 byte/s
+
+	  - stuck-interval
+	  	Interval to fire the stuck check timer for e.g. FlexCop cards.
+		Default 5 seconds, 0 disables.
+	  
+
+  Tuning or Card type:
+  --------------------
+
+  As getstream supports DVB-C, DVB-T and DVB-S and all need different
+  parameters for tuning in on the right transponder here is a short
+  introduction on how to enter the right parameters.
+
+  DVB-T:
+  -----
+    
+    There are 6 possible options to list for a DVB-T transponder:
+
+      frequency		- Frequency of transponder in Hz
+      bandwidth		- auto, 6 (6Mhz), 7 (7Mhz), 8 (8Mhz)
+      transmission-mode	- auto, 2 (2Khz), 8 (8Khz)
+      guard-interval	- auto, 4 (1/4), 8 (1/8), 16 (1/16), 32 (1/32)
+      hierarchy		- none, auto, 1, 2, 4
+      modulation	- auto, 16, 32, 64, 128, 256
+
+    Example:
+
+        dvb-t {
+          frequency 570000000;
+          bandwidth 8;
+          transmission-mode auto;
+          guard-interval auto;
+          hierarchy none;
+          modulation auto;
+        };
+
+
+  DVB-S / DVB-S2:
+  ------
+  	DVB-S consists of 2 parts - the LNB and the Transponder config:
+
+	lnb-sharing	- Boolean When set getstream trys to not send
+			  an 22Khz Pilot tone or set high voltage for
+			  High/Low band or Polarisation but instead
+			  trusts a different card to do all necessary
+			  things. Some cards can not disable their power
+			  voltage completely so look out for problems.
+
+	lnb
+		The config needs to match your LNB (Low Block converter)
+		on your Dish - If you have a Ku Band LNB (Normal for
+		most of the World) you need these informations:
+
+		lof1 	- Local osscilator frequency 1 (Low Band)
+		lof2	- Local osscilator frequency 2 (High Band)
+		slof	- Local osscilator frequency cut off
+
+		If the transponder frequency is above the slof getstream
+		enables the 22Khz Pilot tone to switch the LNB to
+		High Band.
+
+		If you have a C Band LNB you dont have a slof so dont
+		configure it.  If you have a multipoint C Band LNB
+		you have lof1 and lof2 in case you dont just configure
+		the lof1.
+
+	Transponder:
+		frequency	- Frequency of the Transponder in hz.
+		polarisation	- Either H or V for Horizontal or Vertical
+		symbol-rate	- Symbol Rate - Most European transponders use 27500000
+		diseqc		- LNB Diseq code
+
+	dvb-s {
+		lnb-sharing yes;
+		lnb {
+			lof1 9750000;
+			lof2 10600000;
+			slof 11700000;
+		};
+
+		transponder {
+			frequency 12266000;
+			polarisation h;
+			symbol-rate 27500000;
+			diseqc 4;
+		};
+	};
+
+	For "DVB-S2" the type obviously has to be changed to "dvb-s2". Also getstream
+	need to be compiled against the multiproto header files and you need to be using
+	multiproto enabled cards.
+
+  Input:
+  ------
+	The input section in every stream defines which parts of the
+	Transponder needs to be forwarded into this stream. Currently
+	there are 3 options.
+
+	pid	- A static pid to forward. Sometimes people want to 
+		  have the encryption stuff forwarded e.g. pid 10 and 11
+
+	pnr	- Program number e.g. a full Programm including all pids.
+
+	full	- A full transponder e.g. the same as pid 0x2000.
+
+	Example:
+	--------
+
+	input {
+		full;
+	};
+
+  SAP:
+  ------
+	Can be used in the output-rtp and output-udp sections to send SAP announcements.
+
+	scope		- Multicast group which is used for the SAP announcemens.
+			  Possible values:
+			    global	- Global SAP address (224.2.127.254:9875) (default)
+			    org		- Organization-local SAP address (239.195.255.255:9875)
+			    local	- Local SAP address (239.255.255.255:9875)
+			    link	- Link-local SAP address (224.0.0.255:9875)
+
+	sap-group	- Multicast group address which is used for the SAP announcemens (overrides scope).
+	sap-port	- Port which is used for the SAP announcemens (overrides scope).
+	announce-host	- unused
+	announce-port	- unused
+	ttl		- TTL for the SAP announcemens.
+			  By default the output stream's TTL is used.
+	interval	- Announcement interval (in seconds) (default=1).
+	playgroup	- SAP/SDP group name.
+	uri		- An URI with additional information.
+	description	- Stream description.
+	email		- EMail contact information (can be used multiple times).
+	phone		- Phone contact information (can be used multiple times).
+	attribute	- Additional SDP attribute, see RFC2327 for details (can be used multiple times).
+
+	Example:
+	--------
+	sap {
+		scope global;
+		interval 5;
+		playgroup "TV";
+		description "Example TV stream";
+		uri "http://example.com";
+		email "<Bob Smith> bob@example.com";
+		phone "+49 555 555-555";
+		attribute "tool:getstream";
+		attribute "recvonly";
+	};
