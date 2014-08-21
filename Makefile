@@ -20,10 +20,10 @@ OBJ-tsdecode=tsdecode.o psi.o crc32.o
 all: getstream tsdecode
 
 tsdecode: $(OBJ-tsdecode)
-	gcc $(LDFLAGS) -o $@ $+
+	$(CC) $(LDFLAGS) -o $@ $+
 
 getstream: $(OBJ-getstream)
-	gcc $(LDFLAGS) -o $@ $+
+	$(CC) $(LDFLAGS) -o $@ $+
 
 clean:
 	-rm -f $(OBJ-getstream) $(OBJ-tsdecode)
